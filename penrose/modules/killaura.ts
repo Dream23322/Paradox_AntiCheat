@@ -120,7 +120,28 @@ function checkIfFacingEntity(attacker: Player, target: Player): boolean {
     const dotProduct = Vector3Utils.dot(attackerVector, targetVector);
     const angle = Math.acos(dotProduct) * (180 / Math.PI);
 
-    return angle <= MAX_ORIENTATION_DIFFERENCE;
+    // Account for different platforms, this has been possible since the Minecraft 1.21.4X update, which gives the scripting API access to players client info
+    // Using player.clientSystemInfo.platformType we can get the players platform and use that in checks to make it more or less strict based on that value.
+
+    // These value have not been tested and may need to be edited.
+    let maxAngle = MAX_ORIENTATION_DIFFERENCE;
+    const platform = attacker.clientSystemInfo.platformType;
+    switch(platform) {
+        // Handle 'Desktop'
+        case "Desktop": {
+            maxAngle -= 15;
+        }
+        // Handle 'Console'
+        case "Console": {
+            maxAngle -= 10;
+        }
+        // Handle mobile
+        case "Mobile": {
+            maxAngle = 90;
+        }
+    }
+
+    return angle <= maxAngle;
 }
 
 /**
