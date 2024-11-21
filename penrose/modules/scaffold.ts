@@ -27,6 +27,8 @@ export function stopScaffoldCheck() {
     playerBlockPlacements.clear();
 }
 
+// Gets the numberline opposite of a number.
+function rNumber(input: number): number { return -input; }
 /**
  * Detects if the player is using scaffolding hacks and returns the positions of suspicious blocks.
  *
@@ -122,6 +124,18 @@ export function startScaffoldCheck() {
                 });
             });
         }
+
+        // Check for common pitch angles that clients use to bypass. Mainly horion client.
+        const playerRotation = player.getRotation();
+        const pitch = playerRotation.x;
+        if(Math.abs(pitch) === 60) {
+            system.run(() => {
+                // Reset the block and lagback the player as they are 100% using client modifications.
+                block.setType("minecraft:air");
+                const playerVelocity = player.getVelocity();
+                player.setVelocity(rNumber(playerVelocity.x), playerVelocity.y, rNumber(playerVelocity.z));
+            });
+        }           
     };
 
     // Clean up when a player leaves
