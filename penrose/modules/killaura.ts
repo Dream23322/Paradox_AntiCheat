@@ -56,6 +56,7 @@ function getDynamicThreshold(intervals: number[]): number {
 function onEntityHit(event: EntityHitEntityAfterEvent) {
     const attacker = event.damagingEntity;
     const target = event.hitEntity;
+    const attackerRots = attacker.getRotation();
 
     // Only proceed if the attacker and target are players
     if (!(attacker instanceof Player) || !(target instanceof Player)) return;
@@ -86,7 +87,7 @@ function onEntityHit(event: EntityHitEntityAfterEvent) {
     const isFacingTarget = checkIfFacingEntity(attacker, target);
 
     // Flag player for suspicious killaura behavior
-    if (!isFacingTarget || distance > MAX_ATTACK_DISTANCE || recentAttacks.length >= MAX_ATTACKS_PER_SECOND || isSuspiciousAttackPattern(attackTimes)) {
+    if (!isFacingTarget || distance > MAX_ATTACK_DISTANCE || recentAttacks.length >= MAX_ATTACKS_PER_SECOND || isSuspiciousAttackPattern(attackTimes) || isFlatRotation(attackerRots.x, attackerRots.y) {
         const healthComponentVictim = target.getComponent("health");
 
         // Get or initialize the victim's health
@@ -145,6 +146,19 @@ function isSuspiciousAttackPattern(attackTimes: number[]): boolean {
     const isConsistent = intervalDifferences.every((diff) => Math.abs(diff) <= dynamicThreshold);
 
     return isConsistent; // Return true if all interval differences are within the threshold range
+}
+
+// isFlatRotation returns if the players pitch and/or yaw is flat (rounded), this is a common issue in a lot of hive clients, which are the only ones updated currently.
+function isFlatRotation(pitch: number, yaw: number) {
+
+    // Get the difference between the rounded rotations and the actual rotation, if its 0 its rounded so return true.
+    // If the pitch or yaw is 0, it can mean that the player has teleported causing their rotation to be 0, 0
+    const isFlatPitch = Math.abs(Math.round(pitch) - pitch) === 0 && pitch !== 0;
+    const isFlatYaw = Math.abs(Math.round(yaw) - yaw) === 0 && yaw !== 0;
+    // The logic above can be improved to account for some clients (private versions of solstice do this) which add a small float value to their pitch or yaw if it's flat. 
+    // This can be detected but WILL need a buffer to stop false flags as it can be achieved legit, if the advanced logic is added, I would also recommending confirming that the player is moving with some decent speed.
+    
+    return isFlatPitch || isFlatYaw;
 }
 
 /**
