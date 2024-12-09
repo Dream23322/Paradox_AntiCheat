@@ -53,7 +53,7 @@
         "check-naming": "node bin/tree-format.js",
         "build": "npm run check-naming & node bin/build-package.js",
         "dist": "npm run check-naming & node bin/build-package.js --mcpack",
-        "personal-build": "npm run check-naming & bin/node build-package.js & node bin/personal-build-package.js",
+        "personal-build": "npm run check-naming & node build-package.js & node bin/personal-build-package.js",
         "personal-dist": "npm run check-naming & node bin/build-package.js --mcpack & node bin/personal-build-package.js --mcpack"
     }
 }
