@@ -5,7 +5,11 @@ import path from "path";
 import AdmZip from "adm-zip";
 import os from "os";
 
-// Function to retrieve the latest BDS version
+/**
+ * Retrieves the latest version of the Bedrock Dedicated Server (BDS) from a remote API.
+ *
+ * @returns {Promise<string>} - The latest version of BDS.
+ */
 function getLatestVersion() {
     const apiURL = "https://ssk.taiyu.workers.dev/zh-hans/download/server/bedrock";
     return new Promise((resolve, reject) => {
@@ -18,7 +22,7 @@ function getLatestVersion() {
                 res.on("end", () => {
                     const versionMatches = data.match(/bedrock-server-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/g);
                     if (versionMatches && versionMatches.length > 0) {
-                        const latestVersion = versionMatches.map((version) => version.split("-").pop()).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))[0]; // Use the first version
+                        const latestVersion = versionMatches.map((version) => version.split("-").pop()).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))[0];
                         resolve(latestVersion);
                     } else {
                         reject("Failed to retrieve the latest version.");
@@ -31,7 +35,12 @@ function getLatestVersion() {
     });
 }
 
-// Function to download the BDS server
+/**
+ * Downloads the specified version of the BDS server for the current operating system.
+ *
+ * @param {string} version - The version of the BDS server to download.
+ * @returns {Promise<string>} - The location where the BDS zip file was saved.
+ */
 function downloadBDS(version) {
     const osType = os.platform();
     let downloadURL;
@@ -77,6 +86,12 @@ function downloadBDS(version) {
     });
 }
 
+/**
+ * Extracts the downloaded BDS server zip file.
+ *
+ * @param {string} version - The version of the BDS server to extract.
+ * @returns {Promise<void>} - Resolves when extraction is complete.
+ */
 async function extractBDS(version) {
     const zipFile = `bedrock-server-${version}.zip`;
     const extractionDir = `bedrock-server-${version}`;
@@ -86,7 +101,7 @@ async function extractBDS(version) {
     return new Promise((resolve, reject) => {
         try {
             const zip = new AdmZip(zipFile);
-            zip.extractAllTo(extractionDir, /*overwrite*/ true);
+            zip.extractAllTo(extractionDir, true);
 
             console.log("   - Extraction complete.\n");
             resolve();
@@ -97,7 +112,9 @@ async function extractBDS(version) {
     });
 }
 
-// Main script
+/**
+ * Main script to manage the BDS server download, extraction, and folder copying.
+ */
 async function main() {
     try {
         const latestVersion = await getLatestVersion();
@@ -117,7 +134,7 @@ async function main() {
         const downloadLocation = await downloadBDS(latestVersion);
 
         // Proceed with extraction
-        await extractBDS(latestVersion, downloadLocation);
+        await extractBDS(latestVersion);
 
         // Delete the zip archive after extraction is complete
         deleteZipArchive(downloadLocation);
@@ -129,19 +146,42 @@ async function main() {
     }
 }
 
+/**
+ * Deletes the downloaded zip archive after extraction.
+ *
+ * @param {string} zipFile - The path to the zip file to be deleted.
+ */
+function deleteZipArchive(zipFile) {
+    console.log(`> Deleting zip archive: ${zipFile}`);
+    fs.unlink(zipFile, (err) => {
+        if (err) {
+            console.error(`   - Error deleting zip archive: ${err.message}`);
+        } else {
+            console.log("   - Zip archive deleted.");
+        }
+    });
+}
+
+/**
+ * Retrieves the directory of the latest installed BDS version.
+ *
+ * @returns {string | null} - The directory of the latest version, or null if no previous version is found.
+ */
 function getLatestOldVersion() {
     const dirs = fs.readdirSync(process.cwd()).filter((file) => fs.lstatSync(file).isDirectory() && file.startsWith("bedrock-server-"));
     if (dirs.length === 0) {
         return null;
     }
 
-    return dirs
-        .sort((a, b) => {
-            return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
-        })
-        .pop();
+    return dirs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })).pop();
 }
 
+/**
+ * Copies important folders from the old version of the BDS server to the new version.
+ *
+ * @param {string} oldVersionDir - The directory of the old BDS version.
+ * @param {string} newVersionDir - The directory of the new BDS version.
+ */
 function copyFolders(oldVersionDir, newVersionDir) {
     console.log("> Copying worlds and development packs folders...");
 
@@ -207,6 +247,12 @@ function copyFolders(oldVersionDir, newVersionDir) {
     }
 }
 
+/**
+ * Recursively copies a directory and its contents to a new location.
+ *
+ * @param {string} source - The source directory to copy.
+ * @param {string} destination - The destination directory.
+ */
 function copyDirectory(source, destination) {
     if (!fs.existsSync(destination)) {
         fs.mkdirSync(destination, { recursive: true });
@@ -225,6 +271,12 @@ function copyDirectory(source, destination) {
     }
 }
 
+/**
+ * Compares and updates the server.properties file between the old and new BDS versions.
+ *
+ * @param {string} oldVersionDir - The directory of the old BDS version.
+ * @param {string} newVersionDir - The directory of the new BDS version.
+ */
 async function updateServerProperties(oldVersionDir, newVersionDir) {
     const oldPropertiesFile = `${oldVersionDir}/server.properties`;
     const newPropertiesFile = `${newVersionDir}/server.properties`;
@@ -258,7 +310,12 @@ async function updateServerProperties(oldVersionDir, newVersionDir) {
     }
 }
 
-// Helper function to read a properties file
+/**
+ * Reads the contents of a properties file and returns it as an object.
+ *
+ * @param {string} filePath - The path to the properties file.
+ * @returns {Object} - The key-value pairs from the properties file.
+ */
 function readPropertiesFile(filePath) {
     const properties = {};
     const fileContents = fs.readFileSync(filePath, "utf8").split("\n");
@@ -273,7 +330,12 @@ function readPropertiesFile(filePath) {
     return properties;
 }
 
-// Helper function to write properties to a file
+/**
+ * Writes an updated properties object to a file.
+ *
+ * @param {string} filePath - The path to the properties file.
+ * @param {Object} properties - The updated properties to write to the file.
+ */
 function writePropertiesFile(filePath, properties) {
     const fileContents = Object.entries(properties)
         .map(([key, value]) => `${key}=${value}`)
@@ -282,20 +344,25 @@ function writePropertiesFile(filePath, properties) {
     fs.writeFileSync(filePath, fileContents, "utf8");
 }
 
-// Function to prompt for user input
+/**
+ * Asks a question in the console and returns the user's response.
+ *
+ * @param {string} query - The question to ask.
+ * @returns {Promise<string>} - The user's response.
+ */
 function askQuestion(query) {
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
     });
 
-    return new Promise((resolve) =>
+    return new Promise((resolve) => {
         rl.question(query, (answer) => {
             rl.close();
             resolve(answer);
-        })
-    );
+        });
+    });
 }
 
-// Run the script
-main();
+// Execute the main function
+main().catch((error) => console.error("Error:", error));

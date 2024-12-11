@@ -244,6 +244,10 @@ export const opCommand: Command = {
         };
 
         if (args[0] === "list") {
+            if (securityCheck !== 4) {
+                sender.sendMessage("§cYou do not have permission to view the security clearance list.");
+                return;
+            }
             displaySecurityList(sender);
             return;
         }

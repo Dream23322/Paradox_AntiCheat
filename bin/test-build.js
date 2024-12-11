@@ -1,16 +1,9 @@
 import fs from "fs";
 import path from "path";
-import { promisify } from "util";
 import { spawn, spawnSync } from "child_process";
 import os from "os";
 import fse from "fs-extra";
 import { glob } from "glob";
-import { fileURLToPath } from "url";
-
-const exec = promisify((await import("child_process")).exec);
-
-// Constants
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Execute version-sync.js to ensure versions are synchronized
 console.log("\nSyncing version with version-sync.js...");
@@ -29,6 +22,26 @@ function getLatestBedrockServerDir() {
     return glob.sync("bedrock-server-*")[0];
 }
 
+async function runCommand(command, args) {
+    return new Promise((resolve, reject) => {
+        const process = spawn(command, args, {
+            stdio: "inherit", // Inherit stdio to display output in the terminal
+        });
+
+        process.on("close", (code) => {
+            if (code === 0) {
+                resolve();
+            } else {
+                reject(new Error(`Command failed with code ${code}`));
+            }
+        });
+
+        process.on("error", (err) => {
+            reject(new Error(`Failed to start process: ${err.message}`));
+        });
+    });
+}
+
 async function checkAndBuild() {
     // Clean up the 'build/' directory
     const cleanBuildDir = "build";
@@ -43,12 +56,12 @@ async function checkAndBuild() {
     if (!bedrockServerDir) {
         console.error("> Bedrock server directory not found...\n");
         // Execute your BDS script here
-        const bdsProcess = spawn("node", ["bds.js"], {
+        const bdsProcess = spawn("node", ["bin/bds.js"], {
             stdio: "inherit",
         });
         spawnedProcesses.push(bdsProcess); // Add to the array
 
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
             bdsProcess.on("close", (code) => {
                 if (code === 0) {
                     bedrockServerDir = glob.sync("bedrock-server-*")[0];
@@ -56,7 +69,7 @@ async function checkAndBuild() {
                     resolve();
                 } else {
                     console.error("   - Error while setting up the Bedrock server.");
-                    process.exit(code);
+                    reject(`BDS setup failed with code ${code}`);
                 }
             });
         });
@@ -98,28 +111,23 @@ async function checkAndBuild() {
     // Check if --personal parameter is present
     const isServerModePersonal = process.argv.includes("--personal");
 
-    // Determine the commands to execute
-    const firstCommand = "node bin/build-package.js --server";
-    const secondCommand = "node bin/personal-build-package.js --server";
+    // Commands for building packages
+    const firstCommand = "node";
+    const firstArgs = ["bin/build-package.js", "--server"];
+    const secondCommand = "node";
+    const secondArgs = ["bin/personal-build-package.js", "--server"];
 
-    // Determine the OS type and execute the appropriate build commands sequentially
     try {
-        if (os.type() === "Linux") {
-            await exec(firstCommand);
-            if (isServerModePersonal) {
-                await exec(secondCommand);
-            }
-        } else if (os.type() === "Windows_NT") {
-            await exec(firstCommand);
-            if (isServerModePersonal) {
-                await exec(secondCommand);
-            }
-        } else {
-            console.error("Unsupported OS: " + os.type());
+        // Run the first build command
+        await runCommand(firstCommand, firstArgs);
+
+        // Run the second build command if the --personal parameter is passed
+        if (isServerModePersonal) {
+            await runCommand(secondCommand, secondArgs);
         }
-        console.log("Build process completed successfully.");
     } catch (error) {
-        console.error("Error executing the command:", error.message);
+        console.error("Error executing build commands:", error.message);
+        process.exit(1); // Abort immediately if any command fails
     }
 
     // Copy the build contents to the 'paradox' directory
@@ -170,6 +178,7 @@ async function checkAndBuild() {
                 });
             } else {
                 console.error("   - Error setting execute permission for bedrock_server.");
+                process.exit(1); // Abort immediately if error occurs
             }
         });
     } else if (os.type() === "Windows_NT") {
@@ -186,7 +195,11 @@ async function checkAndBuild() {
         });
     } else {
         console.error("   - Unsupported OS: " + os.type());
+        process.exit(1); // Abort immediately if unsupported OS
     }
 }
 
-checkAndBuild();
+checkAndBuild().catch((err) => {
+    console.error("Error during the build process:", err);
+    process.exit(1); // Abort immediately on any failure
+});

@@ -6,14 +6,25 @@ import { fileURLToPath } from "url";
 // Constants
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Function to run a command and handle errors
+function runCommand(command, args) {
+    const result = spawnSync(command, args, { stdio: "inherit" });
+
+    if (result.status !== 0) {
+        console.error(`${command} failed with code ${result.status}:`);
+        if (result.stderr && result.stderr.length > 0) {
+            console.error(result.stderr.toString());
+        } else if (result.stdout && result.stdout.length > 0) {
+            console.error(result.stdout.toString());
+        }
+        process.exit(1); // Exit immediately if the command fails
+    }
+    return result;
+}
+
 // Execute version-sync.js to ensure versions are synchronized
 console.log("\nSyncing version with version-sync.js...");
-const versionSyncResult = spawnSync("node", ["./bin/version-sync.js"], { stdio: "inherit" });
-
-if (versionSyncResult.status !== 0) {
-    console.error("Version synchronization failed.");
-    process.exit(1); // Exit with error code if version sync fails
-}
+runCommand("node", ["./bin/version-sync.js"]);
 
 // Read package.json to get the version
 const packageJson = fs.readJsonSync("package.json");
@@ -36,37 +47,12 @@ assets.forEach((asset) => {
 
 // Bundle penrose/node_modules to build/scripts/node_modules
 console.log("Running esbuild for bundling");
-const esbuildResult = spawnSync("node", ["./bin/esbuild.js"], {
-    stdio: "inherit", // Directly forward output to the parent process
-});
-
-if (esbuildResult.status !== 0) {
-    console.error("Esbuild failed:");
-    if (esbuildResult.stderr && esbuildResult.stderr.length > 0) {
-        console.error(esbuildResult.stderr.toString());
-    } else if (esbuildResult.stdout && esbuildResult.stdout.length > 0) {
-        console.error(esbuildResult.stdout.toString());
-    }
-    process.exit(1); // Exit with non-zero status to indicate failure
-}
+runCommand("node", ["./bin/esbuild.js"]);
 
 // Build project using TypeScript
 console.log("Building the project");
 const tsConfigPath = path.resolve("./tsconfig.json");
-const tsResult = spawnSync("node", ["./node_modules/typescript/bin/tsc", "-p", tsConfigPath], {
-    stdio: "inherit", // Directly forward output to the parent process
-});
-
-// Check TypeScript compilation result
-if (tsResult.status !== 0) {
-    console.error("TypeScript compilation failed:");
-    if (tsResult.stderr && tsResult.stderr.length > 0) {
-        console.error(tsResult.stderr.toString());
-    } else if (tsResult.stdout && tsResult.stdout.length > 0) {
-        console.error(tsResult.stdout.toString());
-    }
-    process.exit(1); // Exit with non-zero status to indicate failure
-}
+runCommand("node", ["./node_modules/typescript/bin/tsc", "-p", tsConfigPath]);
 
 // Check if --server parameter is present
 const isServerMode = process.argv.includes("--server");
@@ -84,14 +70,8 @@ if (!isServerMode) {
     }
 
     // Explicitly specify the archive format
-    const zipResult = spawnSync("7z", ["a", `-tzip`, outputFilePath, "CHANGELOG.md", "LICENSE", "README.md", "manifest.json", "pack_icon.png", "scripts"], { cwd: "build" });
-
-    // Check zip command result
-    if (zipResult.status !== 0) {
-        console.error("Error creating distribution zip file:");
-        console.error(zipResult.stderr?.toString() || zipResult.stdout?.toString());
-        process.exit(1);
-    }
+    console.log("Creating zip archive...");
+    runCommand("7z", ["a", `-tzip`, outputFilePath, "CHANGELOG.md", "LICENSE", "README.md", "manifest.json", "pack_icon.png", "scripts"], { cwd: "build" });
 
     console.log(`Archive created successfully: ${outputFilePath}`);
 }
