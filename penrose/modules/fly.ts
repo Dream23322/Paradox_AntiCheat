@@ -144,8 +144,10 @@ export async function startFlyCheck(): Promise<void> {
 
     currentRunId = system.runInterval(async () => {
         if (isRunning) {
+            // Restore the backup runId if an overlap is detected
+            system.clearRun(currentRunId);
             currentRunId = runIdBackup;
-            return;
+            return; // Skip this iteration if the previous one is still running
         }
 
         runIdBackup = currentRunId;

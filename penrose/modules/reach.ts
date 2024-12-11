@@ -155,9 +155,10 @@ export function startHitReachCheck(): void {
 
     let isRunning = false;
 
-    runIdBackup = system.runInterval(() => {
+    currentRunId = system.runInterval(() => {
         if (isRunning) {
             // Restore the backup runId if an overlap is detected
+            system.clearRun(currentRunId);
             currentRunId = runIdBackup;
             return; // Skip this iteration if the previous one is still running
         }

@@ -121,10 +121,9 @@ export function startAFKChecker(hours: number = 0, minutes: number = 10, seconds
 
     currentRunId = system.runInterval(async () => {
         if (isRunning) {
-            // Restore previous run ID if a previous run is still in progress
-            if (runIdBackup !== null) {
-                currentRunId = runIdBackup;
-            }
+            // Restore the backup runId if an overlap is detected
+            system.clearRun(currentRunId);
+            currentRunId = runIdBackup;
             return; // Skip this iteration if the previous one is still running
         }
 
