@@ -1,4 +1,4 @@
-import { ChatSendBeforeEvent, Player, World } from "@minecraft/server";
+import { ChatSendBeforeEvent, Player } from "@minecraft/server";
 import { Command } from "../../classes/command-handler";
 import { MinecraftEnvironment } from "../../classes/container/dependencies";
 import { addPlayerToSecurityClearanceList } from "../../utility/level-4-security-tracker";
@@ -20,78 +20,32 @@ export const opCommand: Command = {
     name: "op",
     description: "Grant a player Paradox-Op!",
     usage: "{prefix}op <player> | {prefix}op list",
-    examples: [`{prefix}op`, `{prefix}op Player Name`, `{prefix}op "Player Name"`, `{prefix}op help`, `{prefix}op list`],
+    examples: [`{prefix}op`, `{prefix}op Player Name`, `{prefix}op \"Player Name\"`, `{prefix}op help`, `{prefix}op list`],
     category: "Moderation",
     securityClearance: 4,
 
     /**
-     * Executes the op command.
-     * @param {ChatSendBeforeEvent} message - The message object.
-     * @param {string[]} args - The command arguments.
-     * @param {MinecraftEnvironment} minecraftEnvironment - The Minecraft environment instance.
+     * Executes the OP command logic.
+     * @param {ChatSendBeforeEvent} message - The message object that contains details about the chat event.
+     * @param {string[]} args - The arguments passed along with the command.
+     * @param {MinecraftEnvironment} minecraftEnvironment - The Minecraft environment instance providing access to the game world and players.
      */
     execute: (message: ChatSendBeforeEvent, args: string[], minecraftEnvironment: MinecraftEnvironment): void => {
         const world = minecraftEnvironment.getWorld();
-        const system = minecraftEnvironment.getSystem();
         const sender = message.sender;
         const securityCheck = sender.getDynamicProperty("securityClearance") as number;
 
-        /**
-         * Prompts the player to enter their password and verifies it.
-         * @param {Player} player - The player to whom the GUI should be displayed.
-         * @returns {Promise<boolean>} - A Promise that resolves to true if the password is correct, false otherwise.
-         */
-        const promptForPassword = (player: Player): Promise<boolean> => {
-            return new Promise((resolve, reject) => {
-                const showPasswordPrompt = () => {
-                    const passwordGui = minecraftEnvironment.initializeModalFormData();
-                    passwordGui.title("Paradox Op");
-                    passwordGui.textField("\nEnter Password:", "Enter Password");
-
-                    passwordGui
-                        .show(player)
-                        .then((result) => {
-                            if (result && result.canceled && result.cancelationReason === "UserBusy") {
-                                showPasswordPrompt();
-                                return;
-                            }
-
-                            const formValues = result?.formValues || [];
-                            if (formValues.length === 0) {
-                                resolve(false);
-                                return;
-                            }
-
-                            const [enteredPassword] = formValues;
-                            const storedPassword = world.getDynamicProperty("paradoxPassword") as string;
-
-                            if (enteredPassword === storedPassword) {
-                                resolve(true);
-                            } else {
-                                player.sendMessage("§cIncorrect password. Please try again.");
-                                showPasswordPrompt();
-                            }
-                        })
-                        .catch((error: Error) => {
-                            console.error("Paradox Unhandled Rejection: ", error);
-                            reject(error);
-                        });
-                };
-
-                showPasswordPrompt();
-            });
-        };
+        const moduleKey = "paradoxOPSEC";
+        const securityListObject = world.getDynamicProperty(moduleKey) as string;
+        const securityClearanceListData: SecurityClearanceData = securityListObject ? JSON.parse(securityListObject) : { securityClearanceList: [] };
 
         /**
-         * Adds a player's name and ID to the security clearance list.
-         * @param {Player} player - The player to add.
+         * Adds a player to the security clearance list.
+         * @param {Player} player - The player to add to the list.
+         * This function adds the player to the security clearance list and sets them as the host if they are the first player.
          */
         const addPlayerToSecurityList = (player: Player) => {
-            const moduleKey = "paradoxOPSEC";
-            const securityClearanceListKey = "securityClearanceList";
-            const securityListObject = world.getDynamicProperty(moduleKey) as string;
-            const securityClearanceListData: SecurityClearanceData = securityListObject ? JSON.parse(securityListObject) : { securityClearanceList: [] };
-            const securityClearanceList = securityClearanceListData[securityClearanceListKey] ?? [];
+            const securityClearanceList = securityClearanceListData.securityClearanceList;
 
             const playerInfo: PlayerInfo = {
                 name: player.name,
@@ -104,7 +58,6 @@ export const opCommand: Command = {
 
             if (!securityClearanceList.some((item: PlayerInfo) => item.id === player.id)) {
                 securityClearanceList.push(playerInfo);
-                securityClearanceListData[securityClearanceListKey] = securityClearanceList;
                 world.setDynamicProperty(moduleKey, JSON.stringify(securityClearanceListData));
             }
             addPlayerToSecurityClearanceList(player);
@@ -113,11 +66,10 @@ export const opCommand: Command = {
         /**
          * Displays the list of players with security clearance level 4.
          * @param {Player} player - The player requesting the list.
+         * This function sends a message displaying the host and all players with security clearance level 4.
          */
         const displaySecurityList = (player: Player) => {
-            const moduleKey = "paradoxOPSEC";
-            const securityClearanceListData: SecurityClearanceData = JSON.parse(world.getDynamicProperty(moduleKey) as string);
-            const securityClearanceList = securityClearanceListData.securityClearanceList ?? [];
+            const securityClearanceList = securityClearanceListData.securityClearanceList;
 
             const hostInfo = securityClearanceListData.host ? `§2Host§7: ${securityClearanceListData.host.name} (§2ID§7: ${securityClearanceListData.host.id})` : "Host: §2None";
 
@@ -127,120 +79,28 @@ export const opCommand: Command = {
         };
 
         /**
-         * The remaining logic to be executed after password validation.
-         * @param {Player} player - The player to whom the GUI should be displayed.
+         * Processes the OP command logic and updates security clearance for the target player.
+         * @param {SecurityClearanceData} securityClearanceListData - The current security clearance list data.
+         * @param {Player} target - The target player to be granted OP status.
+         * This function updates the security clearance for the sender or the target player to level 4 and adds them to the security clearance list.
          */
-        const continueOpCommand = (player: Player) => {
-            if (!securityCheck) {
-                player.setDynamicProperty("securityClearance", 4);
-                player.sendMessage("§2[§7Paradox§2]§o§7 You have updated your security clearance to level 4.");
-                addPlayerToSecurityList(player);
+        const processOpCommand = (securityClearanceListData: SecurityClearanceData, target: Player) => {
+            if (!securityClearanceListData.host?.id || (securityClearanceListData.host?.id === sender.id && target.id === sender.id)) {
+                sender.setDynamicProperty("securityClearance", 4);
+                sender.sendMessage("§2[§7Paradox§2]§o§7 You have updated your security clearance to level 4.");
+                addPlayerToSecurityList(sender);
                 return;
             }
 
-            let targetPlayer: Player | undefined = undefined;
-            const playerName: string = args.join(" ").trim().replace(/["@]/g, "");
-
-            if (playerName.length > 0) {
-                targetPlayer = world.getAllPlayers().find((playerObject: Player) => playerObject.name === playerName);
-            }
-
-            if (!targetPlayer && playerName.length === 0) {
-                targetPlayer = player;
-            }
-
-            if (!targetPlayer) {
-                player.sendMessage(`§cPlayer "${playerName}" not found.`);
+            if (target.id !== sender.id) {
+                target.setDynamicProperty("securityClearance", 4);
+                target.sendMessage(`§2[§7Paradox§2]§o§7 Your security clearance has been updated by ${sender.name}!`);
+                sender.sendMessage(`§2[§7Paradox§2]§o§7 Security clearance has been updated for ${target.name}!`);
+                addPlayerToSecurityList(target);
                 return;
             }
 
-            if (targetPlayer.name !== player.name) {
-                targetPlayer.setDynamicProperty("securityClearance", 4);
-                targetPlayer.sendMessage(`§2[§7Paradox§2]§o§7 Your security clearance has been updated by ${player.name}!`);
-                player.sendMessage(`§2[§7Paradox§2]§o§7 Security clearance has been updated for ${targetPlayer.name}!`);
-                addPlayerToSecurityList(targetPlayer);
-                return;
-            }
-
-            player.sendMessage("§2[§7Paradox§2]§o§7 You have executed the OP command. Please close this window.");
-
-            const opFailGui = (player: Player, world: World): void => {
-                const failGui = minecraftEnvironment.initializeMessageFormData();
-                failGui.title("                 Paradox Op");
-                failGui.body("§2[§7Paradox§2]§o§7 Please enter a new password again. Your confirmed password did not match!");
-                failGui.button1("Ok");
-                failGui.button2("Cancel");
-
-                failGui
-                    .show(player)
-                    .then((result) => {
-                        if (result && (result.canceled || result.selection === 1)) {
-                            return;
-                        } else {
-                            openOpGui(player, world);
-                        }
-                    })
-                    .catch((error: Error) => {
-                        console.error("Paradox Unhandled Rejection: ", error);
-                        if (error instanceof Error) {
-                            // Check if error.stack exists before trying to split it
-                            if (error.stack) {
-                                const stackLines: string[] = error.stack.split("\n");
-                                if (stackLines.length > 1) {
-                                    const sourceInfo: string[] = stackLines;
-                                    console.error("Error originated from:", sourceInfo[0]);
-                                }
-                            }
-                        }
-                    });
-            };
-
-            const openOpGui = (player: Player, world: World): void => {
-                const opGui = minecraftEnvironment.initializeModalFormData();
-                opGui.title("Paradox Op");
-                opGui.textField("\nNew Password:", "Enter Password");
-                opGui.textField("\nConfirm New Password:", "Enter Password");
-
-                opGui
-                    .show(player)
-                    .then((result) => {
-                        if (result && result.canceled && result.cancelationReason === "UserBusy") {
-                            return openOpGui(player, world);
-                        }
-
-                        const formValues = result?.formValues ?? [];
-                        if (formValues.length === 0) {
-                            return;
-                        }
-
-                        const [newPassword, confirmPassword] = formValues;
-                        if (newPassword !== confirmPassword) {
-                            opFailGui(player, world);
-                        } else {
-                            player.setDynamicProperty("securityClearance", 4);
-                            world.setDynamicProperty("paradoxPassword", confirmPassword);
-                            player.sendMessage("§2[§7Paradox§2]§o§7 Your security clearance has been updated!");
-                            addPlayerToSecurityList(player);
-                        }
-                    })
-                    .catch((error: Error) => {
-                        console.error("Paradox Unhandled Rejection: ", error);
-                        if (error instanceof Error) {
-                            // Check if error.stack exists before trying to split it
-                            if (error.stack) {
-                                const stackLines: string[] = error.stack.split("\n");
-                                if (stackLines.length > 1) {
-                                    const sourceInfo: string[] = stackLines;
-                                    console.error("Error originated from:", sourceInfo[0]);
-                                }
-                            }
-                        }
-                    });
-            };
-
-            system.run(() => {
-                openOpGui(player, world);
-            });
+            addPlayerToSecurityList(sender);
         };
 
         if (args[0] === "list") {
@@ -252,31 +112,26 @@ export const opCommand: Command = {
             return;
         }
 
-        const pass = world.getDynamicProperty("paradoxPassword") as string;
-        // Retrieve and parse security clearance list data
-        const moduleKey = "paradoxOPSEC";
-        const securityListObject = world.getDynamicProperty(moduleKey) as string;
-        const securityClearanceListData: SecurityClearanceData = securityListObject ? JSON.parse(securityListObject) : { securityClearanceList: [] };
-        if (pass && (securityCheck === 4 || securityClearanceListData.host.id === message.sender.id)) {
-            message.sender.sendMessage("§2[§7Paradox§2]§o§7 You have executed the OP command. Please close this window.");
-            system.run(() => {
-                promptForPassword(message.sender)
-                    .then((validated) => {
-                        if (!validated) {
-                            message.sender.sendMessage("§cPassword validation failed.");
-                            return;
-                        }
-                        continueOpCommand(message.sender);
-                    })
-                    .catch((error) => {
-                        console.error("Password validation failed: ", error);
-                    });
-            });
-            return;
-        } else if (pass && securityCheck < 4) {
-            message.sender.sendMessage("§cYou do not have permissions!");
-            return;
+        // Check if the sender is the host or has the required clearance
+        if (!securityClearanceListData.host?.id || securityCheck === 4 || securityClearanceListData.host?.id === sender.id) {
+            let targetPlayer: Player | undefined = undefined;
+            const playerName: string = args.join(" ").trim().replace(/[@"]+/g, "");
+
+            if (playerName.length > 0) {
+                targetPlayer = world.getAllPlayers().find((playerObject: Player) => playerObject.name === playerName);
+            }
+
+            if (!targetPlayer && playerName.length === 0) {
+                targetPlayer = sender;
+            }
+
+            if (!targetPlayer) {
+                sender.sendMessage(`§cPlayer \"${playerName}\" not found.`);
+                return;
+            }
+            processOpCommand(securityClearanceListData, targetPlayer);
+        } else {
+            sender.sendMessage("§cYou do not have permissions!");
         }
-        continueOpCommand(message.sender);
     },
 };
