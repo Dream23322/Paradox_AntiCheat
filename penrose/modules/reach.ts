@@ -31,7 +31,7 @@ interface PlayerHistoryEntry {
  * @returns The Euclidean distance between the two positions.
  */
 function calculateDistance(pos1: Position, pos2: Position): number {
-    return Math.sqrt(Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.y - pos2.y, 2) + Math.pow(pos1.z - pos2.z, 2));
+    return Math.hypot(pos1.x - pos2.x, pos1.y - pos2.y, pos1.z - pos2.z);
 }
 
 /**
