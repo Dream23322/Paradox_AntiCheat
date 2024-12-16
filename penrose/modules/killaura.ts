@@ -27,7 +27,10 @@ function calculateAverage(values: number[]): number {
  * @returns {number} - Standard deviation.
  */
 function calculateStandardDeviation(values: number[], average: number): number {
-    const variance = values.reduce((acc, val) => acc + Math.pow(val - average, 2), 0) / values.length;
+    const variance = values.reduce((acc, val) => {
+        const diff = val - average;
+        return acc + diff * diff;
+    }, 0) / values.length;
     return Math.sqrt(variance);
 }
 
